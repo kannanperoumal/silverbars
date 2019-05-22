@@ -1,16 +1,16 @@
 package org.silverbars.service.impl;
 
-import java.util.Comparator;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 import org.silverbars.service.OrderService;
+import org.silverbars.types.MergedOrder;
 import org.silverbars.types.Order;
+import org.silverbars.types.OrderException;
 import org.silverbars.types.OrderType;
 
 /**
@@ -19,78 +19,79 @@ import org.silverbars.types.OrderType;
  */
 public class OrderServiceImpl implements OrderService {
 
-	private final Queue<Order> ordersPersistance = new ConcurrentLinkedQueue<>();
-	private final Comparator<Integer> sellComarator = (Integer p1, Integer p2)->p1-p2;
-	private final Comparator<Integer> buyComarator = (Integer p1, Integer p2)->p2-p1;
+	private static final Queue<Order> orders = new ConcurrentLinkedQueue<>();
+	private static final Map<Order, MergedOrder> buyOrders = new ConcurrentSkipListMap<>();
+	private static final Map<Order, MergedOrder> sellOrders = new ConcurrentSkipListMap<>();
 	
+	
+	/* (non-Javadoc)
+	 * @see org.silverbars.service.OrderService#registerOrder(org.silverbars.types.Order)
+	 */
 	@Override
-	public boolean registerOrder(Order o) {
+	public Order registerOrder(Order order) throws OrderException {
 		try {
-			String err = extractValidationError(o);
+			String err = extractValidationError(order);
 			if(!err.equals("")) {
-				throw new Exception(err);
+				throw new OrderException(err);
 			}
-			return ordersPersistance.add(o);
-		
-		} catch (Exception e) {
-			System.err.println("Exception occured at order creation. "+ e.getMessage());
-			e.printStackTrace();
-			return false;
-		}
-	}
-
-	@Override
-	public boolean cancelOrder(Order o) {
-		try {
-			String err = extractValidationError(o);
-			if(!err.equals("")) {
-				throw new Exception(err);
-			}
-			return ordersPersistance.remove(o);
-		
-		} catch (Exception e) {
-			System.err.println("Exception occured at order deletion. "+ e.getMessage());
-			e.printStackTrace();
-			return false;
-		}
-	}
-
-	@Override
-	public Map<OrderType, Map<Integer, List<Order>>> summaryOrders() {
-		try {
-			Map<Integer, List<Order>> sellSorted = new TreeMap<>(sellComarator);
-			Map<Integer, List<Order>> sellUnsortedMap = ordersPersistance.stream()
-					.filter(o->OrderType.SELL.equals(o.getOrderType()))
-					.collect(Collectors.groupingBy(e-> ((Order)e).getPrice()));
-
-			// map sorting naturally
-			sellSorted.putAll(sellUnsortedMap);
-			sellSorted.forEach((price, orders)-> System.out.println(OrderType.SELL + " "+ orders.stream().collect(Collectors.summingDouble(o->((Order)o).getQuantity())) + " kg for £"+ price));
-				
-			Map<Integer, List<Order>> buySorted = new TreeMap<>(buyComarator);
-			Map<Integer, List<Order>> buyUnsortedMap = ordersPersistance.stream()
-					.filter(o->OrderType.BUY.equals(o.getOrderType()))
-					.collect(Collectors.groupingBy(e-> ((Order)e).getPrice()));
-			// sort in natural 
-			buySorted.putAll(buyUnsortedMap);
-			buySorted.forEach((price, orders)-> System.out.println(OrderType.BUY + " "+ orders.stream().collect(Collectors.summingDouble(o->((Order)o).getQuantity())) + " kg for £"+ price));
 			
-			// this return is for testing purpose
-			Map<OrderType, Map<Integer, List<Order>>> result = new HashMap<>(2);
-			result.put(OrderType.SELL, sellSorted);
-			result.put(OrderType.BUY, buySorted);
+			Map<Order, MergedOrder> orderMap = OrderType.BUY.equals(order.getOrderType())? buyOrders : sellOrders;
+			MergedOrder mo = orderMap.get(order);
+			if(mo==null) {
+				mo = order.toMergedOrder();
+				orderMap.put(order, mo);
+			} else {
+				mo.merge(order);
+			}
+			orders.add(order);
+			return order;
+		} catch (Exception e) {
+			throw new OrderException(e);
+		}
+	}
+
+	/* (non-Javadoc)
+	 * @see org.silverbars.service.OrderService#cancelOrder(org.silverbars.types.Order)
+	 */
+	@Override
+	public Order cancelOrder(Order order) throws OrderException {
+		try {
+			String err = extractValidationError(order);
+			if(!err.equals("")) {
+				throw new OrderException(err);
+			}
+			Map<Order, MergedOrder> orderMap = OrderType.BUY.equals(order.getOrderType())? buyOrders : sellOrders;
+			MergedOrder mo = orderMap.get(order);
+			if(mo==null) {
+				throw new OrderException("The requested order for deletion doesn't created yet. Order:"+order);
+			} 
+			if(mo.getQuantity() <= order.getQuantity()) {
+				orderMap.remove(order);
+			} else {
+				mo.remove(order);
+			}
+			orders.remove(order);
+			return order;
+		
+		} catch (Exception e) {
+			throw new OrderException("Exception occured at order removal. ", e);
+		}
+	}
+
+	/* (non-Javadoc)
+	 * @see org.silverbars.service.OrderService#summaryOrders()
+	 */
+	@Override
+	public Map<OrderType, Collection<MergedOrder>> summaryOrders() throws OrderException {
+		try {
+			Map<OrderType, Collection<MergedOrder>> result = new HashMap<>(2);
+			result.put(OrderType.SELL, sellOrders.values());
+			result.put(OrderType.BUY, buyOrders.values());
 			return result;
 
 		} catch (Exception e) {
-			System.err.println("Exception occured at order summarization. "+ e.getMessage());
-			e.printStackTrace();
-			throw e;
+			throw new OrderException("Exception occured at order summarization", e);
 		}
-	}
-
-	@Override
-	public int availableOrders() {
-		return ordersPersistance.size();
 	}
 	
 	private String extractValidationError(final Order o) {

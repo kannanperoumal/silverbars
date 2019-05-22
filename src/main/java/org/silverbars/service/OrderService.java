@@ -1,9 +1,11 @@
 package org.silverbars.service;
 
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 
+import org.silverbars.types.MergedOrder;
 import org.silverbars.types.Order;
+import org.silverbars.types.OrderException;
 import org.silverbars.types.OrderType;
 
 /**
@@ -14,25 +16,25 @@ public interface OrderService {
 	/**
 	 * This allows creating a new order
 	 * @param order
-	 * @return boolean
+	 * @return
+	 * @throws OrderException
 	 */
-	boolean registerOrder(Order order);
+	Order registerOrder(Order order) throws OrderException;
 	
 	/**
 	 * This allows removing a registered order
 	 * @param order
-	 * @return boolean
+	 * @return
+	 * @throws OrderException
 	 */
-	boolean cancelOrder(Order order);
+	Order cancelOrder(Order order) throws OrderException;
 	
 	/**
 	 * This allows providing summary of order dash board
-	 */
-	Map<OrderType, Map<Integer, List<Order>>> summaryOrders();
-	
-	/**
-	 * This returns number of available orders
 	 * @return
+	 * @throws OrderException
 	 */
-	int availableOrders();
+	Map<OrderType, Collection<MergedOrder>> summaryOrders() throws OrderException;
+	
+	
 }

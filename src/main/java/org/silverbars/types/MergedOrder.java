@@ -1,45 +1,54 @@
 package org.silverbars.types;
 
+import java.util.LinkedList;
+import java.util.List;
+
 /**
- * @author kannan 
+ * @author kannan
  *
  */
-public final class Order implements Comparable<Order>{
-	private String userid;
-	private double quantity;
+public final class MergedOrder implements Comparable<MergedOrder>{
 	private int price;
+	private double quantity;
 	private OrderType orderType;
-	
-	public Order(String userid, double quantity, int price, OrderType orderType) {
-		this.userid = userid;
-		this.quantity = quantity;
-		this.price = price;
-		this.orderType = orderType;
-	}
+	private List<Order> orders;
 
-	public String getUserid() {
-		return userid;
-	}
-	public double getQuantity() {
-		return quantity;
+	public MergedOrder(final Order order) {
+		this.price = order.getPrice();
+		this.quantity = order.getQuantity();
+		this.orderType = order.getOrderType();
+		this.orders = new LinkedList<>();
+		this.orders.add(order);
 	}
 	public int getPrice() {
 		return price;
 	}
+	public double getQuantity() {
+		return quantity;
+	}
 	public OrderType getOrderType() {
 		return orderType;
 	}
+	public int getNumberOfOrders() {
+		return orders.size();
+	}
 	
-	public MergedOrder toMergedOrder() {
-		return new MergedOrder(this);
+	public void merge(final Order order) {
+		this.quantity += order.getQuantity();
+		this.orders.add(order);
+	}
+	
+	public void remove(final Order order) {
+		this.quantity -= order.getQuantity();
+		this.orders.remove(order);
 	}
 	
 	@Override
-	public int compareTo(Order o) {
+	public int compareTo(MergedOrder order) {
 		if(OrderType.SELL.equals(this.orderType)) {
-			return o.price - this.price;
+			return order.price - this.price;
 		} else if(OrderType.BUY.equals(this.orderType)) {
-			return this.price - o.price;
+			return this.price - order.price;
 		}
 		return 0;
 	}
@@ -53,10 +62,8 @@ public final class Order implements Comparable<Order>{
 		long temp;
 		temp = Double.doubleToLongBits(quantity);
 		result = prime * result + (int) (temp ^ (temp >>> 32));
-		result = prime * result + ((userid == null) ? 0 : userid.hashCode());
 		return result;
 	}
-
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj)
@@ -65,24 +72,17 @@ public final class Order implements Comparable<Order>{
 			return false;
 		if (getClass() != obj.getClass())
 			return false;
-		Order other = (Order) obj;
+		MergedOrder other = (MergedOrder) obj;
 		if (orderType != other.orderType)
 			return false;
 		if (price != other.price)
 			return false;
 		if (Double.doubleToLongBits(quantity) != Double.doubleToLongBits(other.quantity))
 			return false;
-		if (userid == null) {
-			if (other.userid != null)
-				return false;
-		} else if (!userid.equals(other.userid))
-			return false;
 		return true;
 	}
-
 	@Override
 	public String toString() {
-		return "Order [userid=" + userid + ", quantity=" + quantity + ", price=" + price + ", orderType=" + orderType
-				+ "]";
+		return orderType + ": "+ quantity +" kg for " + price + " GBP  "+ orders.size() + " order(s)";
 	}
 }
